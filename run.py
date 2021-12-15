@@ -1,66 +1,41 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import math
 import os
-import pickle
 import time
 from datetime import datetime
 
 import torch
-from model import ParserModel
+from ff_model import FFModel
+from cnn_model import CNNModel
 from torch import nn, optim
 from tqdm import tqdm
 from utils.featurize import AverageMeter, load_and_preprocess_data, minibatches
 
 
-def train(parser,
+def train(classifier,
           train_data,
           dev_data,
           output_path,
           batch_size=1024,
           n_epochs=10,
           lr=0.0005):
-    """ Train the neural dependency parser.
-
-    @param parser (Parser): Neural Dependency Parser
-    @param train_data ():
-    @param dev_data ():
-    @param output_path (str): Path to which model weights and results are written.
-    @param batch_size (int): Number of examples in a single batch
-    @param n_epochs (int): Number of training epochs
-    @param lr (float): Learning rate
-    """
     best_dev_UAS = 0
 
-    optimizer = optim.Adam(parser.model.parameters(), lr=lr)
+    optimizer = optim.Adam(classifier.model.parameters(), lr=lr)
     loss_func = nn.CrossEntropyLoss()
 
     for epoch in range(n_epochs):
         print("Epoch {:} out of {:}".format(epoch + 1, n_epochs))
-        dev_UAS = train_for_epoch(parser, train_data, dev_data, optimizer,
+        dev_UAS = train_for_epoch(classifier, train_data, dev_data, optimizer,
                                   loss_func, batch_size)
         if dev_UAS > best_dev_UAS:
             best_dev_UAS = dev_UAS
             print("New best dev UAS! Saving model.")
-            torch.save(parser.model.state_dict(), output_path)
+            torch.save(classifier.model.state_dict(), output_path)
         print("")
 
 
 def train_for_epoch(parser, train_data, dev_data, optimizer, loss_func,
                     batch_size):
-    """ Train the neural dependency parser for single epoch.
-
-    @param parser (Parser): Neural Dependency Parser
-    @param train_data ():
-    @param dev_data ():
-    @param optimizer (nn.Optimizer): Adam Optimizer
-    @param loss_func (nn.CrossEntropyLoss): Cross Entropy Loss Function
-    @param batch_size (int): batch size
-    @param lr (float): learning rate
-
-    @return dev_UAS (float): Unlabeled Attachment Score (UAS) for dev data
-    """
     parser.model.train()
     n_minibatches = math.ceil(len(train_data) / batch_size)
     loss_meter = AverageMeter()
@@ -69,7 +44,6 @@ def train_for_epoch(parser, train_data, dev_data, optimizer, loss_func,
         for i, (train_x, train_y) in enumerate(
                 minibatches(train_data, batch_size)):
             optimizer.zero_grad()
-            loss = 0.
             train_x = torch.from_numpy(train_x).long()
             train_y = torch.from_numpy(train_y.nonzero()[1]).long()
 
@@ -90,20 +64,15 @@ def train_for_epoch(parser, train_data, dev_data, optimizer, loss_func,
 
 
 if __name__ == "__main__":
-    # Note: Set debug to False, when training on entire corpus
-    # debug = True
     debug = False
-
-    assert (torch.__version__ == "1.0.0"), "Please install torch version 1.0.0"
 
     print(80 * "=")
     print("INITIALIZING")
     print(80 * "=")
-    parser, embeddings, train_data, dev_data, test_data = load_and_preprocess_data(
-        debug)
+    parser, embeddings, train_data, dev_data, test_data = load_and_preprocess_data(debug)
 
     start = time.time()
-    model = ParserModel(embeddings)
+    model = CNNModel(embeddings)
     parser.model = model
     print("took {:.2f} seconds\n".format(time.time() - start))
 
@@ -122,7 +91,7 @@ if __name__ == "__main__":
         dev_data,
         output_path,
         batch_size=1024,
-        n_epochs=10,
+        n_epochs=20,
         lr=0.0005)
 
     if not debug:
